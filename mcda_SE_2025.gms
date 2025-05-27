@@ -7,6 +7,12 @@ Variables
     of_cost               'Objective function: Value for cost minimization'
     of_emission           'Objective function: Value for emission minimization'
     of_cvar               'Objective function: Value for CVaR of residual load minimization';
+    
+Positive Variables
+    g(N,T,U)            'Variable: Generation of thermal unit u at node n at time t [MWh]'
+    d(N,T)              'Variable: Demand-side response activated at node N at time T [MWh]'
+    b_vre(N,E)          'Variable: Adopted capacity of VRE unit e at node n [MW]'
+    ;
 
 Equations
     cost_eq               'Objective function equation: Minimize total cost'
@@ -37,7 +43,7 @@ Equations
     CostAux2              'Auxiliary constraint: Cost control in policy-guided planning (PGP) emission minimization'
     EmissionsAux          'Auxiliary constraint: Upper bound on emissions when minimizing cost';
 
-cost_eq.. of_cost =e= sum((N,T,U),())
+cost_eq.. of_cost =e= sum((N,T,U), (C_opr(U)+S*P(U))*g(N,T,U)) + sum((N,T), C_dsr(T,N)*d(N,T)) + sum((N,E), C_inv_vre(E)*b_vre(N,E)) + sum((N,U), C_ava_gen(U)*a_gen(N,U))
 
 
     

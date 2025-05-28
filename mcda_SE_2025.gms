@@ -14,14 +14,20 @@ Positive Variables
     b_vre(N,E)              'Variable: Adopted capacity of VRE unit e at node n [MW]'
     a_gen(N,U)              'Variable: Available capacity of thermal unit u at node n [MW]'
     a_vre(N,E)              'Variable: Available capacity of VRE unit e at node n [MW]'
-    a_hyd(N,W)              'Variable: Available capacity of hydro unit w at node n [MW]';
+    a_hyd(N,W)              'Variable: Available capacity of hydro unit w at node n [MW]'
+    h(N)                    'Variable: Minimum threshold residual load at VaR at node n'
+    z(N,T)                  'Variable: Amount of residual load that falls above VaR threshold at node n at time T [MWh]'
+    u(N,T,E)                'Variable: VRE generation level by unit e at node n in period T [MWh]'
+    r_in(N,T,W)             'Variable: Volume of water pumped into hydro unit w at node n in period t [m3]'
+    r_out(N,T,W)            'Variable: Volume of water turbined out from hydro unit w at node n in period t [m3]';
+
 
 Equations
     cost_eq                 'Objective function equation: Minimize total cost'
     emission_eq             'Objective function equation: Minimize total CO₂ emissions'
     cvar_eq                 'Objective function equation: Minimize CVaR of residual load'
     
-    energy_balance_eq       'Constraint: Energy balance (supply must meet demand)'
+    energy_balance          'Constraint: Energy balance (supply must meet demand)'
     flow_pos_limit          'Constraint: Power-flow limit in positive direction (inward) by line and by period'
     flow_neg_limit          'Constraint: Power-flow limit in negative direction (outward) by line and by period'
     load_shed_limit         'Constraint: Maximum allowable load shedding by node and time period'
@@ -43,9 +49,14 @@ Equations
 *    EmissionGoal            'Auxiliary constraint: Emission goal (used in minimax or benchmarking)'
 *    CostAux                 'Auxiliary constraint: Upper bound on cost when minimizing emissions'
 *    CostAux2                'Auxiliary constraint: Cost control in policy-guided planning (PGP) emission minimization'
-*    EmissionsAux            'Auxiliary constraint: Upper bound on emissions when minimizing cost';
+*    EmissionsAux            'Auxiliary constraint: Upper bound on emissions when minimizing cost'
+;
 
-cost_eq.. of_cost =e= sum((N,T,U), (C_opr(U)+S*P(U))*g(N,T,U)) + sum((N,T), C_dsr(T,N)*d(N,T)) + sum((N,E), C_inv_vre(E)*b_vre(N,E)) + sum((N,U), C_ava_gen(U)*a_gen(N,U)) + sum((N,E), C_ava_vre(E)*a_vre(N,E)) + sum((N,W), C_ava_hyd(W)*a_hyd(N,W))
+cost_eq.. of_cost =e= sum((N,T,U), (C_opr(U)+S*P(U))*g(N,T,U)) + sum((N,T), C_dsr(T,N)*d(N,T)) + sum((N,E), C_inv_vre(E)*b_vre(N,E)) + sum((N,U), C_ava_gen(U)*a_gen(N,U)) + sum((N,E), C_ava_vre(E)*a_vre(N,E)) + sum((N,W), C_ava_hyd(W)*a_hyd(N,W));
+emission_eq.. of_emission =e= sum((N,T,U), P(U)*g(N,T,U));
+cvar_eq.. of_cvar =e= sum(N, (h(N) + (1/(1-alpha)*T)*sum(T, z(N,T))))
+energy_balance(N,T).. sum(U, g(N,T,U)) + sum(E, u(N,T,E)) + sum(W, Q_hyd(N,W)*r_out(N,T,W) - F_hyd(N,W)*r_in(N,T,W)) + X(T,N) - D(T,N)
+
 
 
     

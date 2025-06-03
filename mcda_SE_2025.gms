@@ -34,9 +34,9 @@ Equations
     load_shed_limit         'Constraint: Maximum allowable load shedding by node and time period'
     gen_capacity_limit      'Constraint: Thermal generation capped by available capacity for each technology and time'
     gen_avail_limit         'Constraint: Thermal generation must not exceed installed capacity per technology'
-    vre_capacity_limit      'Constraint: VRE generation capped by available VRE output in each period'
-    vre_avail_limit         'Constraint: VRE generation limited by installed capacity per technology'
-    vre_inv_limit           'Constraint: Limit on new VRE adoption per technology'
+    vre_capacity_limit      'Constraint: VRE generation limitation on available capacity'
+    vre_avail_limit         'Constraint: VRE generation availability limitation on installed capacity'
+    vre_inv_limit           'Constraint: Limitation on additional VRE generation capacity'
     gen_up_ramp_limit       'Constraint: Thermal generation ramp-up limit between consecutive time periods'
     gen_down_ramp_limit     'Constraint: Thermal generation ramp-down limit between consecutive time periods'
     storage_balance         'Constraint: Storage state-of-charge balance for hydro units across time'
@@ -53,17 +53,21 @@ Equations
 *    EmissionsAux            'Auxiliary constraint: Upper bound on emissions when minimizing cost'
 ;
 
-cost_eq..                   of_cost =e= sum((N,T,U), (C_opr(U)+S*P(U))*g(N,T,U)) + sum((N,T), C_dsr(T,N)*dsr(N,T)) + sum((N,E), C_inv_vre(E)*b_vre(N,E)) + sum((N,U), C_ava_gen(U)*a_gen(N,U)) + sum((N,E), C_ava_vre(E)*a_vre(N,E)) + sum((N,W), C_ava_hyd(W)*a_hyd(N,W));
-emission_eq..               of_emission =e= sum((N,T,U), P(U)*g(N,T,U));
-cvar_eq..                   of_cvar =e= sum(N, (h(N) + (1/(1-alpha)*T)*sum(T, z(N,T))));
-energy_balance(N,T)..       sum(U, g(N,T,U)) + sum(E, u(N,T,E)) + sum(W, Q_hyd(N,W)*r_out(N,T,W) - F_hyd(N,W)*r_in(N,T,W)) + sum(L $ NMinus(L,N), V*TT(T)*f(L,T)) - sum(L $ NPlus(L,N), V*TT(T)*f(L,T)) + dsr(N,T) + X(T,N) - D(T,N) =e= 0;
-flow_pos_limit(L,T)..       TT(T)*K_pos(L)-V*TT(T)*f(L,T) =g= 0;
-flow_neg_limit(L,T)..       V*TT(T)*f(L,T) + TT(T)*K_neg(L) =g= 0;
-load_shed_limit(N,T)..      TT(T)*D_dsr(T,N) - dsr(N,T) =g= 0;
-gen_capacity_limit(N,T,U).. TT(T)*a_gen(N,U) - g(N,T,U) =g= 0;
-gen_avail_limit(N,U)..      G_gen(N,U) - a_gen(N,U) =g= 0;
-vre_capacity_limit(N,T,E).. TT(T)*A(T,E,N)*a_vre(N,E) - u(N,T,E) =g= 0;
-       
+cost_eq..                                       of_cost =e= sum((N,T,U), (C_opr(U)+S*P(U))*g(N,T,U)) + sum((N,T), C_dsr(T,N)*dsr(N,T)) + sum((N,E), C_inv_vre(E)*b_vre(N,E)) + sum((N,U), C_ava_gen(U)*a_gen(N,U)) + sum((N,E), C_ava_vre(E)*a_vre(N,E)) + sum((N,W), C_ava_hyd(W)*a_hyd(N,W));
+emission_eq..                                   of_emission =e= sum((N,T,U), P(U)*g(N,T,U));
+cvar_eq..                                       of_cvar =e= sum(N, (h(N) + (1/(1-alpha)*T)*sum(T, z(N,T))));
+energy_balance(N,T)..                           sum(U, g(N,T,U)) + sum(E, u(N,T,E)) + sum(W, Q_hyd(N,W)*r_out(N,T,W) - F_hyd(N,W)*r_in(N,T,W)) + sum(L $ NMinus(L,N), V*TT(T)*f(L,T)) - sum(L $ NPlus(L,N), V*TT(T)*f(L,T)) + dsr(N,T) + X(T,N) - D(T,N) =e= 0;
+flow_pos_limit(L,T)..                           TT(T)*K_pos(L)-V*TT(T)*f(L,T) =g= 0;
+flow_neg_limit(L,T)..                           V*TT(T)*f(L,T) + TT(T)*K_neg(L) =g= 0;
+load_shed_limit(N,T)..                          TT(T)*D_dsr(T,N) - dsr(N,T) =g= 0;
+gen_capacity_limit(N,T,U)..                     TT(T)*a_gen(N,U) - g(N,T,U) =g= 0;
+gen_avail_limit(N,U)..                          G_gen(N,U) - a_gen(N,U) =g= 0;
+gen_up_ramp_limit(N,T,U)$( ORD(T) ge 2 )..      TT(T)*R_up(U)*a_gen(N,U) - g(N,T,U) + g(N,T-1,U) =g= 0;
+gen_down_ramp_limit(N,T,U)$( ORD(T) ge 2 )..    g(N,T,U) - g(N,T-1,U) + TT(T)*R_down(U)*a_gen(N,U) =g= 0;
+vre_capacity_limit(N,T,E)..                     TT(T)*A(T,E,N)*a_vre(N,E) - u(N,T,E) =g= 0;
+vre_avail_limit(N,E)..                          G_vre(N,E) + b_vre(N,E) - a_vre(N,E) =g= 0;
+vre_inv_limit(N,E)..                            M(N,E)*G_vre(N,E) - b_vre(N,E) =g= 0;
+        
 
 
     

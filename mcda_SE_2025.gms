@@ -21,6 +21,8 @@ Positive Variables
     u(N,T,E)                'Variable: VRE generation level by unit e at node n in period T [MWh]'
     r_in(N,T,W)             'Variable: Volume of water pumped into hydro unit w at node n in period t [m3]'
     r_out(N,T,W)            'Variable: Volume of water turbined out from hydro unit w at node n in period t [m3]'
+    r_sto(N,T,W)            'Variable: Volume of water stored by hydro unit w at node n in period t [m3]'
+    s(N,T,W)                'Variable: Volume of water spilled from hydro unit w at node n in period t [m3]' 
 ;
 
 Equations
@@ -67,7 +69,11 @@ gen_down_ramp_limit(N,T,U)$( ORD(T) ge 2 )..    g(N,T,U) - g(N,T-1,U) + TT(T)*R_
 vre_capacity_limit(N,T,E)..                     TT(T)*A(T,E,N)*a_vre(N,E) - u(N,T,E) =g= 0;
 vre_avail_limit(N,E)..                          G_vre(N,E) + b_vre(N,E) - a_vre(N,E) =g= 0;
 vre_inv_limit(N,E)..                            M(N,E)*G_vre(N,E) - b_vre(N,E) =g= 0;
-        
+storage_balance(N,T,W)..                        - r_sto(N,T,W) + r_sto(N,T-1,W)$(ORD(T) > 1) + RR_ini(N,W)$( ORD(T) eq 1 ) + r_in(N,T,W) - r_out(N,T,W) - s(N,T,W) + II_hourly_ror(N,T)$( ORD(W) eq 1) + II_hourly_res(N,T)$( ORD(W) eq 2)  =e= 0;
+storage_max_limit(N,T,W)..                      RR_max(N,W) - r_sto(N,T,W) =G= 0;
+storage_min_limit(N,T,W)$(ORD(T) eq CARD(T))..  r_sto(N,T,W) - RR_min(N,W) =G= 0;
+hydro_pump_limit(N,T,W)..                       TT(T)*RR_in(N,W) * RR_max(N,W)-r_in(N,T,W) =G= 0;
+                      
 
 
     

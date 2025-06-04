@@ -7,7 +7,9 @@ Variables
     of_cost                 'Variable: Objective function value for cost minimization'
     of_emission             'Variable: Objective function value for emission minimization'
     of_cvar                 'Variable: Objective function value for CVaR of residual load minimization'
-    f(L,T)                  'Variable: Power flow on transmission line l in period t [MW]';
+    f(L,T)                  'Variable: Power flow on transmission line l in period t [MW]'
+    h(N)                    'Variable: Minimum threshold residual load at VaR at node n [MWh]'
+    ;
     
 Positive Variables
     g(N,T,U)                'Variable: Generation of thermal unit u at node n in period t [MWh]'
@@ -16,7 +18,6 @@ Positive Variables
     a_gen(N,U)              'Variable: Available capacity of thermal unit u at node n [MW]'
     a_vre(N,E)              'Variable: Available capacity of VRE unit e at node n [MW]'
     a_hyd(N,W)              'Variable: Available capacity of hydro unit w at node n [MW]'
-    h(N)                    'Variable: Minimum threshold residual load at VaR at node n'
     z(N,T)                  'Variable: Amount of residual load that falls above VaR threshold at node n in period t [MWh]'
     u(N,T,E)                'Variable: VRE generation level by unit e at node n in period T [MWh]'
     r_in(N,T,W)             'Variable: Volume of water pumped into hydro unit w at node n in period t [m3]'
@@ -47,6 +48,7 @@ Equations
     hydro_pump_limit        'Constraint: Pumped-hydro charging limit per technology and period'
     hydro_capacity_limit    'Constraint: Hydro generation limit based on available water and capacity'
     hydro_avail_limit       'Constraint: Hydro generation restricted by installed capacity'
+    residual_load_balance   'Constraint: Residual load deviation'
     
 *    CostGoal                'Auxiliary constraint: Cost goal (used in minimax or benchmarking)'
 *    EmissionGoal            'Auxiliary constraint: Emission goal (used in minimax or benchmarking)'
@@ -70,12 +72,39 @@ vre_capacity_limit(N,T,E)..                     TT(T)*A(T,E,N)*a_vre(N,E) - u(N,
 vre_avail_limit(N,E)..                          G_vre(N,E) + b_vre(N,E) - a_vre(N,E) =g= 0;
 vre_inv_limit(N,E)..                            M(N,E)*G_vre(N,E) - b_vre(N,E) =g= 0;
 storage_balance(N,T,W)..                        - r_sto(N,T,W) + r_sto(N,T-1,W)$(ORD(T) > 1) + RR_ini(N,W)$( ORD(T) eq 1 ) + r_in(N,T,W) - r_out(N,T,W) - s(N,T,W) + II_hourly_ror(N,T)$( ORD(W) eq 1) + II_hourly_res(N,T)$( ORD(W) eq 2)  =e= 0;
-storage_max_limit(N,T,W)..                      RR_max(N,W) - r_sto(N,T,W) =G= 0;
-storage_min_limit(N,T,W)$(ORD(T) eq CARD(T))..  r_sto(N,T,W) - RR_min(N,W) =G= 0;
-hydro_pump_limit(N,T,W)..                       TT(T)*RR_in(N,W) * RR_max(N,W)-r_in(N,T,W) =G= 0;
-                      
+storage_max_limit(N,T,W)..                      RR_max(N,W) - r_sto(N,T,W) =g= 0;
+storage_min_limit(N,T,W)$(ORD(T) eq CARD(T))..  r_sto(N,T,W) - RR_min(N,W) =g= 0;
+hydro_pump_limit(N,T,W)..                       TT(T)*RR_in(N,W)*RR_max(N,W) - r_in(N,T,W) =g= 0;
+hydro_capacity_limit(N,T,W)..                   TT(T)*a_hyd(N,W) - Q_hyd(N,W)*r_out(N,T,W) =g= 0;
+hydro_avail_limit(N,T,W)..                      Y_hyd(N,W) - a_hyd(N,W) =g= 0;
+residual_load_balance(N,T)..                    z(N,T) + h(N) - sum(U, g(N,T,U)) =g= 0;
+
+model cost_lp / cost_eq, energy_balance, flow_pos_limit, flow_neg_limit, load_shed_limit, gen_capacity_limit, gen_avail_limit, gen_up_ramp_limit, gen_down_ramp_limit, vre_capacity_limit, vre_avail_limit, vre_inv_limit, storage_balance, storage_max_limit, storage_min_limit, hydro_pump_limit, hydro_capacity_limit, hydro_avail_limit, residual_load_balance /;                       
+model emission_lp / emission_eq, energy_balance, flow_pos_limit, flow_neg_limit, load_shed_limit, gen_capacity_limit, gen_avail_limit, gen_up_ramp_limit, gen_down_ramp_limit, vre_capacity_limit, vre_avail_limit, vre_inv_limit, storage_balance, storage_max_limit, storage_min_limit, hydro_pump_limit, hydro_capacity_limit, hydro_avail_limit, residual_load_balance /;
+model cvar_lp / cvar_eq, energy_balance, flow_pos_limit, flow_neg_limit, load_shed_limit, gen_capacity_limit, gen_avail_limit, gen_up_ramp_limit, gen_down_ramp_limit, vre_capacity_limit, vre_avail_limit, vre_inv_limit, storage_balance, storage_max_limit, storage_min_limit, hydro_pump_limit, hydro_capacity_limit, hydro_avail_limit, residual_load_balance /;
+
+option LP = CPLEX;
+option optcr = 0.0000;
+
+solve cost_lp using lp minimizing of_cost;
+
+Cmin = of_cost.L;
+Emax = of_emission.L;
+Qmax = of_cvar.L;
+
+solve emission_lp using lp minimizing of_emission
+
+Cmax = of_cost.L;
+Emin = of_emission.L;
+Qmax = of_cvar.L;
+
+solve cvar_lp using lp minimizing of_cvar
+
+Cmax = of_cost.L;
+Emax = of_emission.L;
+Qmin = of_cvar.L;
 
 
-    
+
 
 

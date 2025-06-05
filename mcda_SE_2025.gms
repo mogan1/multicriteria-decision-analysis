@@ -3,6 +3,16 @@
 
 $INCLUDE mcda_nordic_data_2024.gms
 
+Scalars
+    Qmin                    'Scalar variable: Minimized CVaR'
+    C2                      'Scalar variable: Intermediary cost during emission minimization'
+    C3                      'Scalar variable: Intermediary cost during CVaR minimization'
+    E1                      'Scalar variable: Intermediary emission during cost minimization'
+    E3                      'Scalar variable: Intermediary emission during CVaR minimization'
+    Q1                      'Scalar variable: Intermediary CVaR during cost minimization'
+    Q2                      'Scalar variable: Intermediary CVaR during emission minimization'
+    
+;
 Variables
     of_cost                 'Variable: Objective function value for cost minimization'
     of_emission             'Variable: Objective function value for emission minimization'
@@ -86,24 +96,33 @@ model cvar_lp / cvar_eq, energy_balance, flow_pos_limit, flow_neg_limit, load_sh
 option LP = CPLEX;
 option optcr = 0.0000;
 
+* Run cost minimization
 solve cost_lp using lp minimizing of_cost;
 
 Cmin = of_cost.L;
-Emax = of_emission.L;
-Qmax = of_cvar.L;
+E1 = of_emission.L;
+Q1 = of_cvar.L;
 
+* Run emission minimization
 solve emission_lp using lp minimizing of_emission
 
-Cmax = of_cost.L;
+C2   = of_cost.L;
 Emin = of_emission.L;
-Qmax = of_cvar.L;
+Q2 = of_cvar.L;
 
+* Run CVaR minimization
 solve cvar_lp using lp minimizing of_cvar
 
-Cmax = of_cost.L;
-Emax = of_emission.L;
+C3 = of_cost.L;
+E3 = of_emission.L;
 Qmin = of_cvar.L;
 
+* Determine Max tuple (Cmax, Emax, Qmax)
+Cmax = max(C2, C3);
+Emax = max(E1, E3);
+Qmax = max(Q1, Q2);
+
+display Cmin, Cmax, Emin, Emax, Qmin, Qmax;
 
 
 

@@ -18,12 +18,16 @@ Variables
 OF_Cost        Objective function value for cost minimisation
 OF_Emissions   Objective function value for emission minimisation
 q              Objective function value for minimax implementation
+* l Transmission lines, t is time period in hours for 1 year
 f(L,T)         Power flow on line l in period t
 ;
 
 Positive Variables
+* n is bidding zones, u is thermal technologies
 a_gen(N,U)    Generation capacity made available of thermal unit u at node n
+* e is VRE technologies
 a_vre(N,E)    Generation capacity made available of VRE unit e at node n
+* w is hydro technologies
 a_hyd(N,W)    Generation capacity made available of hydro unit w at node n
 b_vre(N,E)    Generation-capacity adopted of VRE unit e at node n
 dd(N,T)       DSR activated by node n in period t
@@ -43,6 +47,7 @@ a_hyd.fx(N,W)$(NOT ntow(N,W))=0;
 * Added to turn off investment option
 b_vre.fx(N,E)$(DN eq 1)=0;
 
+* Following parameters are defined in mcda_nordic_data_2024. Parameters are fixed values
 * Added to turn off availability costs
 C_ava_gen(U)$(NAC eq 1)=0;
 C_ava_vre(E)$(NAC eq 1)=0;
@@ -52,9 +57,10 @@ C_ava_hyd(W)$(NAC eq 1)=0;
 C_inv_vre(E)$(NIC eq 1)=0;
 
 * Added to turn off net imports
+* Nodal net import by period loaded from xls
 X(T,N)$(NX eq 1)=0;
 
-* Added to derate nuclear capacity
+* Added to derate or reduce nuclear capacity. As this is set to 0 at the begining it has no effect now
 G_gen(N,'nuclear')=(1-NUC)*G_gen(N,'nuclear');
 
 Display G_gen;
@@ -86,8 +92,15 @@ CostAux2            Auxiliary cost constraint in PGP emission-minimization mode
 EmissionsAux        Auxiliary emission constraint to obtain maximum cost in emission-minimization mode
 ;
 
-CostEq.. OF_Cost=E=SUM((N,T,U), (C_opr(U)+S*P(U))*gg_gen(N,T,U))+SUM((N,T), C_dsr(T,N)*dd(N,T))+SUM((N,E), C_ava_vre(E)*a_vre(N,E) + C_inv_vre(E)*b_vre(N,E))+SUM((N,U), C_ava_gen(U)*a_gen(N,U))+SUM((N,W), C_ava_hyd(W)*a_hyd(N,W));
-EmissionEq.. OF_Emissions=E=SUM((N,T,U), P(U)*gg_gen(N,T,U));
+* Two conflicting objective functions
+CostEq.. OF_Cost =E=
+                        SUM((N,T,U), (C_opr(U)+S*P(U))*gg_gen(N,T,U))
+                       +SUM((N,T), C_dsr(T,N)*dd(N,T))
+                       +SUM((N,E), C_ava_vre(E)*a_vre(N,E) + C_inv_vre(E)*b_vre(N,E))+SUM((N,U), C_ava_gen(U)*a_gen(N,U))
+                       +SUM((N,W), C_ava_hyd(W)*a_hyd(N,W));
+EmissionEq.. OF_Emissions =E=
+                        SUM((N,T,U), P(U)*gg_gen(N,T,U));
+* Definition of constraints using decision variables
 EnergyBalance(N,T).. dd(N,T)+SUM(U, gg_gen(N,T,U))+SUM(E, gg_vre(N,T,E))+SUM(W, Q_hyd(N,W)*r_out(N,T,W)-F_hyd(N,W)*r_in(N,T,W))+X(T,N)+TT(T)*V*SUM(L$NMinus(L,N), f(L,T))-TT(T)*V*SUM(L$NPlus(L,N), f(L,T))-D(T,N)=E=0;
 FlowPosLimit(L,T).. TT(T)*K_pos(L)-V*TT(T)*f(L,T)=G=0;
 FlowNegLimit(L,T).. TT(T)*K_neg(L)+V*TT(T)*f(L,T)=G=0;
@@ -107,6 +120,7 @@ HydroCapacityLimit(N,T,W).. TT(T)*a_hyd(N,W)-Q_hyd(N,W)*r_out(N,T,W)=G=0;
 HydroAvailLimit(N,W).. Y_hyd(N,W)-a_hyd(N,W)=G=0;
 CostGoal.. -W_C*(OF_Cost-Cmin)/Cmin+q=G=0;
 EmissionGoal.. -W_E*(OF_Emissions-Emin)/Emin+q=G=0;
+* Auxiliary Constraints
 CostAux.. -OF_Cost+Cmin=G=0;
 CostAux2.. -OF_Cost+Chat=G=0;
 EmissionsAux.. -OF_Emissions+Emin=G=0;

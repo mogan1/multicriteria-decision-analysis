@@ -3,17 +3,31 @@
 
 $INCLUDE mcda_nordic_data_2024.gms
 
+* Cost, Emission and CVaR bound steps
+Set
+    cgrid /c1*c5/           
+    egrid /e1*e5/           
+    qgrid /q1*q5/     
+    ;
+
+
 Scalars
     Qmin                    'Scalar variable: Minimized CVaR'
     Qmax                    'Scalar variable: Maximised CVaR'
-    C2                      'Scalar variable: Intermediary cost during emission minimization'
-    C3                      'Scalar variable: Intermediary cost during CVaR minimization'
-    E1                      'Scalar variable: Intermediary emission during cost minimization'
-    E3                      'Scalar variable: Intermediary emission during CVaR minimization'
-    Q1                      'Scalar variable: Intermediary CVaR during cost minimization'
-    Q2                      'Scalar variable: Intermediary CVaR during emission minimization'
+    C2                      'Scalar variable: Intermediary cost during independent emission minimization'
+    C3                      'Scalar variable: Intermediary cost during independent CVaR minimization'
+    E1                      'Scalar variable: Intermediary emission during independent cost minimization'
+    E3                      'Scalar variable: Intermediary emission during independent CVaR minimization'
+    Q1                      'Scalar variable: Intermediary CVaR during independent cost minimization'
+    Q2                      'Scalar variable: Intermediary CVaR during independent emission minimization'
     alpha                   'Scalar variable: Confidence level'
-;
+    C_step                  'Scalar variable: Step sizes for cost'
+    E_step                  'Scalar variable: Step sizes for emission'
+    Q_step                  'Scalar variable: Step sizes for CVaR'
+    C_ub                    'Scalar variable: Upper bound on cost in a loop step'
+    E_ub                    'Scalar variable: Upper bound on emissions in a loop step'
+    Q_ub                    'Scalar variable: Upper bound on CVaR in a loop step'
+   ;
 
 Variables
     of_cost                 'Variable: Objective function value for cost minimization'
@@ -36,7 +50,7 @@ Positive Variables
     r_out(N,T,W)            'Variable: Volume of water turbined out from hydro unit w at node n in period t [m3]'
     r_sto(N,T,W)            'Variable: Volume of water stored by hydro unit w at node n in period t [m3]'
     sp(N,T,W)                'Variable: Volume of water spilled from hydro unit w at node n in period t [m3]' 
-;
+   ;
 
 Equations
     cost_eq                 'Objective function equation: Minimize total cost'
@@ -62,8 +76,9 @@ Equations
     hydro_avail_limit       'Constraint: Hydro generation restricted by installed capacity'
     residual_load_balance   'Constraint: Residual load deviation'
     
-*    CostGoal                'Auxiliary constraint: Cost goal (used in minimax or benchmarking)'
-*    EmissionGoal            'Auxiliary constraint: Emission goal (used in minimax or benchmarking)'
+    cost_goal_eq             'Auxiliary constraint: Cost goal'
+    emission_goal_eq         'Auxiliary constraint: Emission goal'
+    cvar_goal_eq             'Auxiliary constraint: CVaR goal'
 *    CostAux                 'Auxiliary constraint: Upper bound on cost when minimizing emissions'
 *    CostAux2                'Auxiliary constraint: Cost control in policy-guided planning (PGP) emission minimization'
 *    EmissionsAux            'Auxiliary constraint: Upper bound on emissions when minimizing cost'
@@ -127,6 +142,59 @@ Qmax = max(Q1, Q2);
 
 display Cmin, Cmax, Emin, Emax, Qmin, Qmax;
 
+C_step = (Cmax - Cmin) / 4;
+E_step = (Emax - Emin) / 4;
+Q_step = (Qmax - Qmin) / 4;
+
+cost_goal_eq..           of_cost     =l= C_ub;
+emission_goal_eq..       of_emission =l= E_ub;
+cvar_goal_eq..           of_cvar     =l= Q_ub;
+
+model aux_cost_min      /cost_eq, emission_goal_eq, cvar_goal_eq, energy_balance, flow_pos_limit, flow_neg_limit, load_shed_limit, gen_capacity_limit, gen_avail_limit, gen_up_ramp_limit, gen_down_ramp_limit, vre_capacity_limit, vre_avail_limit, vre_inv_limit, storage_balance, storage_max_limit, storage_min_limit, hydro_pump_limit, hydro_capacity_limit, hydro_avail_limit, residual_load_balance /;
+model aux_emission_min  /emission_eq, cost_goal_eq, cvar_goal_eq, energy_balance, flow_pos_limit, flow_neg_limit, load_shed_limit, gen_capacity_limit, gen_avail_limit, gen_up_ramp_limit, gen_down_ramp_limit, vre_capacity_limit, vre_avail_limit, vre_inv_limit, storage_balance, storage_max_limit, storage_min_limit, hydro_pump_limit, hydro_capacity_limit, hydro_avail_limit, residual_load_balance /; 
+model aux_cvar_min      /cvar_eq, cost_goal_eq, emission_goal_eq, energy_balance, flow_pos_limit, flow_neg_limit, load_shed_limit, gen_capacity_limit, gen_avail_limit, gen_up_ramp_limit, gen_down_ramp_limit, vre_capacity_limit, vre_avail_limit, vre_inv_limit, storage_balance, storage_max_limit, storage_min_limit, hydro_pump_limit, hydro_capacity_limit, hydro_avail_limit, residual_load_balance /; 
 
 
+* Minimize Auxiliary Cost while bounding emissions and CVaR
+file fout / 'pareto_cost.csv' /;
+loop(egrid,
+    loop(qgrid,
+        E_ub = Emin + (ORD(egrid) - 1) * E_step;
+        Q_ub = Qmin + (ORD(qgrid) - 1) * Q_step;
+
+        solve aux_cost_min using lp minimizing of_cost;
+
+        put fout;
+        put E_ub:12:2, ',', Q_ub:12:2, ',', of_cost.l:12:2, ',', of_emission.l:12:2, ',', of_cvar.l:12:2 /;
+    );
+);
+
+* Minimize Auxiliary Emissions while bounding cost and CVaR
+file fout / 'pareto_emission.csv' /;
+loop(cgrid,
+    loop(qgrid,
+        C_ub = Cmin + (ORD(cgrid) - 1) * C_step;
+        Q_ub = Qmin + (ORD(qgrid) - 1) * Q_step;
+
+        solve aux_emission_min using lp minimizing of_emission;
+
+        put fout;
+        put C_ub:12:2, ',', Q_ub:12:2, ',', of_cost.l:12:2, ',', of_emission.l:12:2, ',', of_cvar.l:12:2 /;
+    );
+);
+
+
+* Minimize Auxiliary CVaR while bounding cost and emissions
+file fout / 'pareto_cvar.csv' /;
+loop(cgrid,
+    loop(egrid,
+        C_ub = Cmin + (ORD(cgrid) - 1) * C_step;
+        E_ub = Emin + (ORD(egrid) - 1) * E_step;
+
+        solve aux_cvar_min using lp minimizing of_cvar;
+
+        put 'fout;
+        put C_ub:12:2, ',', E_ub:12:2, ',', of_cost.l:12:2, ',', of_emission.l:12:2, ',', of_cvar.l:12:2 /;
+    );
+);
 

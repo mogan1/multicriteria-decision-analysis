@@ -3,10 +3,12 @@
 
 $INCLUDE mcda_nordic_data_2024.gms
 
-* 6x6 grid for emissions and CVaR thresholds
+* 6x6 grid for cost, emissions and CVaR thresholds
 Set
     egrid /e1*e6/
-    qgrid /q1*q6/ ;
+    qgrid /q1*q6/
+    cgrid /c1*c6/
+    ;
 
 Scalars
 * Emin/Emax and Cmin/Cmax are defined in INCLUDE
@@ -19,13 +21,16 @@ Scalars
     Q1                      'Scalar variable: Intermediary CVaR during cost minimization'
     Q2                      'Scalar variable: Intermediary CVaR during emission minimization'
     alpha                   'Scalar variable: Confidence level'
-    eps_em                  'emission cap used in each iteration',
+    eps_em                  'emission cap used in each iteration'
     eps_q                   'cvar cap used in each iteration'
+    eps_c                   'cost cap used in each iteration'
 ;
 
 Parameters
     epsilon_em(egrid)      'Grid of emission caps'
-    epsilon_cvar(qgrid)    'Grid of CVaR caps';
+    epsilon_cvar(qgrid)    'Grid of CVaR caps'
+    epsilon_cost(cgrid)    'Grid of cost caps'
+    ;
 
 Variables
     of_cost                 'Variable: Objective function value for cost minimization'
@@ -75,6 +80,7 @@ Equations
     residual_load_balance   'Constraint: Residual load deviation'
     emission_cap            'Limit for emission'
     cvar_cap                'Limit for emission'
+    cost_cap                'Limit for cost'
 
 *    CostGoal                'Auxiliary constraint: Cost goal (used in minimax or benchmarking)'
 *    EmissionGoal            'Auxiliary constraint: Emission goal (used in minimax or benchmarking)'
@@ -106,12 +112,13 @@ hydro_avail_limit(N,T,W)..                      Y_hyd(N,W) - a_hyd(N,W) =g= 0;
 residual_load_balance(N,T)..                    z(N,T) + h(N) - sum(U, g(N,T,U)) =g= 0;
 emission_cap..                                  of_emission =l= eps_em;
 cvar_cap..                                      of_cvar     =l= eps_q;
+cost_cap..                                      of_cost     =l= eps_c;
 
 
 model cost_lp / cost_eq, energy_balance, flow_pos_limit, flow_neg_limit, load_shed_limit, gen_capacity_limit, gen_avail_limit, gen_up_ramp_limit, gen_down_ramp_limit, vre_capacity_limit, vre_avail_limit, vre_inv_limit, storage_balance, storage_max_limit, storage_min_limit, hydro_pump_limit, hydro_capacity_limit, hydro_avail_limit, residual_load_balance /;
 model emission_lp / emission_eq, energy_balance, flow_pos_limit, flow_neg_limit, load_shed_limit, gen_capacity_limit, gen_avail_limit, gen_up_ramp_limit, gen_down_ramp_limit, vre_capacity_limit, vre_avail_limit, vre_inv_limit, storage_balance, storage_max_limit, storage_min_limit, hydro_pump_limit, hydro_capacity_limit, hydro_avail_limit, residual_load_balance /;
 model cvar_lp / cvar_eq, energy_balance, flow_pos_limit, flow_neg_limit, load_shed_limit, gen_capacity_limit, gen_avail_limit, gen_up_ramp_limit, gen_down_ramp_limit, vre_capacity_limit, vre_avail_limit, vre_inv_limit, storage_balance, storage_max_limit, storage_min_limit, hydro_pump_limit, hydro_capacity_limit, hydro_avail_limit, residual_load_balance /;
-Model pareto3D / cost_eq, emission_eq, cvar_eq,
+Model pareto3D_cost / cost_eq, emission_eq, cvar_eq,
                  energy_balance, flow_pos_limit, flow_neg_limit, load_shed_limit,
                  gen_capacity_limit, gen_avail_limit, gen_up_ramp_limit, gen_down_ramp_limit,
                  vre_capacity_limit, vre_avail_limit, vre_inv_limit,
@@ -119,6 +126,23 @@ Model pareto3D / cost_eq, emission_eq, cvar_eq,
                  hydro_pump_limit, hydro_capacity_limit, hydro_avail_limit,
                  residual_load_balance,
                  emission_cap, cvar_cap /;
+Model pareto3D_emission / cost_eq, emission_eq, cvar_eq,
+                 energy_balance, flow_pos_limit, flow_neg_limit, load_shed_limit,
+                 gen_capacity_limit, gen_avail_limit, gen_up_ramp_limit, gen_down_ramp_limit,
+                 vre_capacity_limit, vre_avail_limit, vre_inv_limit,
+                 storage_balance, storage_max_limit, storage_min_limit,
+                 hydro_pump_limit, hydro_capacity_limit, hydro_avail_limit,
+                 residual_load_balance,
+                 cost_cap, cvar_cap /;
+Model pareto3D_cvar / cost_eq, emission_eq, cvar_eq,
+                 energy_balance, flow_pos_limit, flow_neg_limit, load_shed_limit,
+                 gen_capacity_limit, gen_avail_limit, gen_up_ramp_limit, gen_down_ramp_limit,
+                 vre_capacity_limit, vre_avail_limit, vre_inv_limit,
+                 storage_balance, storage_max_limit, storage_min_limit,
+                 hydro_pump_limit, hydro_capacity_limit, hydro_avail_limit,
+                 residual_load_balance,
+                 emission_cap, cost_cap /;
+                 
 
 
 option LP = CPLEX;
@@ -160,10 +184,13 @@ loop(egrid,
 loop(qgrid,
   epsilon_cvar(qgrid) = Qmin + (ord(qgrid) - 1) * (Qmax - Qmin) / (card(qgrid) - 1);
 );
+loop(cgrid,
+  epsilon_cost(cgrid) = Cmin + (ord(cgrid) - 1) * (Cmax - Cmin) / (card(cgrid) - 1);
+);
 
 
-File pareto_out /'pareto3D_cost_min.csv'/;
-Put pareto_out;
+File pareto_out_cost /'pareto3D_cost_min.csv'/;
+Put pareto_out_cost;
 Put '"epsilon_em","epsilon_cvar","cost","emission","cvar"' /;
 
 loop(egrid,
@@ -171,24 +198,86 @@ loop(egrid,
     eps_em = epsilon_em(egrid);
     eps_q  = epsilon_cvar(qgrid);
 
-    g.l(N,T,U)     = 0;
-    dsr.l(N,T)     = 0;
-    b_vre.l(N,E)   = 0;
-    a_gen.l(N,U)   = 0;
-    a_vre.l(N,E)   = 0;
-    a_hyd.l(N,W)   = 0;
-    z.l(N,T)       = 0;
-    h.l(N)         = 0;
-    uv.l(N,T,E)    = 0;
-    r_in.l(N,T,W)  = 0;
-    r_out.l(N,T,W) = 0;
-    r_sto.l(N,T,W) = 0;
-    sp.l(N,T,W)    = 0;
-    f.l(L,T)       = 0;
+    g.L(N,T,U)     = 0;
+    dsr.L(N,T)     = 0;
+    b_vre.L(N,E)   = 0;
+    a_gen.L(N,U)   = 0;
+    a_vre.L(N,E)   = 0;
+    a_hyd.L(N,W)   = 0;
+    z.L(N,T)       = 0;
+    h.L(N)         = 0;
+    uv.L(N,T,E)    = 0;
+    r_in.L(N,T,W)  = 0;
+    r_out.L(N,T,W) = 0;
+    r_sto.L(N,T,W) = 0;
+    sp.L(N,T,W)    = 0;
+    f.L(L,T)       = 0;
 
-    solve pareto3D using lp minimizing of_cost;
+    solve pareto3D_cost using lp minimizing of_cost;
 
-    put epsilon_em(egrid):12:2, ',', epsilon_cvar(qgrid):12:2, ',', of_cost.l:12:2, ',', of_emission.l:12:2, ',', of_cvar.l:12:2 /;
+    put epsilon_em(egrid):12:2, ',', epsilon_cvar(qgrid):12:2, ',', of_cost.L:12:2, ',', of_emission.L:12:2, ',', of_cvar.L:12:2 /;
   );
 );
-putclose pareto_out;
+putclose pareto_out_cost;
+
+File pareto_out_emission /'pareto3D_emission_min.csv'/;
+Put pareto_out_emission;
+Put '"epsilon_cost","epsilon_cvar","cost","emission","cvar"' /;
+
+loop(cgrid,
+  loop(qgrid,
+    eps_c = epsilon_cost(cgrid);
+    eps_q  = epsilon_cvar(qgrid);
+
+    g.L(N,T,U)     = 0;
+    dsr.L(N,T)     = 0;
+    b_vre.L(N,E)   = 0;
+    a_gen.L(N,U)   = 0;
+    a_vre.L(N,E)   = 0;
+    a_hyd.L(N,W)   = 0;
+    z.L(N,T)       = 0;
+    h.L(N)         = 0;
+    uv.L(N,T,E)    = 0;
+    r_in.L(N,T,W)  = 0;
+    r_out.L(N,T,W) = 0;
+    r_sto.L(N,T,W) = 0;
+    sp.L(N,T,W)    = 0;
+    f.L(L,T)       = 0;
+
+    solve pareto3D_emission using lp minimizing of_emission;
+
+    put epsilon_cost(cgrid):12:2, ',', epsilon_cvar(qgrid):12:2, ',', of_cost.L:12:2, ',', of_emission.L:12:2, ',', of_cvar.L:12:2 /;
+  );
+);
+putclose pareto_out_emission;
+
+File pareto_out_cvar /'pareto3D_cvar_min.csv'/;
+Put pareto_out_cvar;
+Put '"epsilon_cost","epsilon_em","cost","emission","cvar"' /;
+
+loop(cgrid,
+  loop(egrid,
+    eps_c = epsilon_cost(cgrid);
+    eps_em  = epsilon_em(egrid);
+
+    g.L(N,T,U)     = 0;
+    dsr.L(N,T)     = 0;
+    b_vre.L(N,E)   = 0;
+    a_gen.L(N,U)   = 0;
+    a_vre.L(N,E)   = 0;
+    a_hyd.L(N,W)   = 0;
+    z.L(N,T)       = 0;
+    h.L(N)         = 0;
+    uv.L(N,T,E)    = 0;
+    r_in.L(N,T,W)  = 0;
+    r_out.L(N,T,W) = 0;
+    r_sto.L(N,T,W) = 0;
+    sp.L(N,T,W)    = 0;
+    f.L(L,T)       = 0;
+
+    solve pareto3D_cvar using lp minimizing of_cvar;
+
+    put epsilon_cost(cgrid):12:2, ',', epsilon_em(egrid):12:2, ',', of_cost.L:12:2, ',', of_emission.L:12:2, ',', of_cvar.L:12:2 /;
+  );
+);
+putclose pareto_out_cvar;

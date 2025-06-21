@@ -1,0 +1,13 @@
+Node,Hydro_Tech,Generation(MWh)
+se1         ,ror         ,        0.00
+se1         ,res         , 18143081.42
+se1         ,phs         ,        0.00
+se2         ,ror         ,        0.00
+se2         ,res         , 36232000.00
+se2         ,phs         ,        0.00
+se3         ,ror         ,  1858907.57
+se3         ,res         ,  9135317.19
+se3         ,phs         ,        0.00
+se4         ,ror         ,   460727.01
+se4         ,res         ,  1029500.00
+se4         ,phs         ,        0.00

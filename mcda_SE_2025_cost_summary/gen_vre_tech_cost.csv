@@ -1,0 +1,9 @@
+Node,VRE_Tech,Generation(MWh)
+se1         ,wind        ,  1541136.00
+se1         ,solar       ,     1001.85
+se2         ,wind        ,  2424039.37
+se2         ,solar       ,     7089.92
+se3         ,wind        ,  5570770.00
+se3         ,solar       ,    97803.53
+se4         ,wind        ,  3720600.00
+se4         ,solar       ,    41691.74

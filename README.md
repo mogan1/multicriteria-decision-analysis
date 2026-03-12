@@ -40,12 +40,21 @@ The solution space is explored using the **Epsilon-Constraint Method**, generati
 1.  Ensure `mcda_nordic_data_2024.gms` is in the working directory.
 2.  Run the primary optimization:
     ```bash
-    gams portfolio_optimization.gms lp=cplex
+    gams mcda_SE_2025_Cmin_3D.gms lp=cplex
     ```
 3.  To address spurious values in risk minimization, run the sweep:
     ```bash
-    gams cvar_sweep.gms lp=cplex
+    gams mcda_SE_2025_Cvar_sweep.gms lp=cplex
     ```
+4.  To get the 36 points for Pareto frtontier, run the following in NEOS server:
+    ```bash
+    gams mcda_SE_2025_Cmin_3D_V3_neos.gms lp=cplex
+    ```
+5.  To get the generation mix for the 36 points, run the following:
+    ```bash
+    gams mcda_SE_2025_report_summary_36points.gms lp=cplex
+    ```
+6. Execute the *optimization.py* file to plot the images for the analysis
 
 ## 📝 Authors
 * **Pushan Deb**

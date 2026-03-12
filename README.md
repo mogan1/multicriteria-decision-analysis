@@ -25,8 +25,7 @@ The solution space is explored using the **Epsilon-Constraint Method**, generati
 ## 📂 Project Structure
 
 * `mcda_nordic_data_2024.gms`: Core data file containing sets (nodes, time, technology) and parameters (demand, VRE profiles, costs).
-* `portfolio_optimization.gms`: Primary optimization script containing the LP formulation and epsilon-constraint loop.
-* `cvar_sweep.gms`: Specialized script for refining the Pareto boundary when CVaR minimization yields degenerate solutions.
+* `optimization.py`: Primary plotting script to plot all images.
 
 ## 🚀 Getting Started
 
